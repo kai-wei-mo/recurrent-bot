@@ -1,0 +1,24 @@
+{
+  "name": "recurrent-bot",
+  "version": "1.0.0",
+  "description": "A Slack bot for managing recurrent, patterned events.",
+  "main": "index.js",
+  "dependencies": {
+    "@slack/bolt": "^3.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kai-wei-mo/recurrent-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/kai-wei-mo/recurrent-bot/issues"
+  },
+  "homepage": "https://github.com/kai-wei-mo/recurrent-bot#readme"
+}
