@@ -1,0 +1,13 @@
+{
+	"pattern": "tag tag tag",
+	"schedule": [
+		{
+			"person": "<@U024UGA3HB2>",
+			"time": "timestamp"
+		},
+		{
+			"person": "tag",
+			"time": "timestamp"
+		}
+	]
+}
