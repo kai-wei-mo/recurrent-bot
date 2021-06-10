@@ -1,6 +1,14 @@
 const { App } = require('@slack/bolt');
 const fs = require('fs');
 
+const dayMap = require('./maps/dayMap.js');
+
+const {
+	sendMessage,
+	scheduleMessage,
+	deleteScheduledMessage,
+} = require('./slack/message.js');
+
 const signingSecret = process.env['signingSecret'];
 const token = process.env['token'];
 const channelId = process.env['channelId'];
@@ -10,23 +18,9 @@ const app = new App({
 	token: token,
 });
 
-const sendMessage = async (channel, text) => {
-	try {
-		// chat.postMessage method using WebClient
-		const result = await app.client.chat.postMessage({
-			channel: channel,
-			text: text,
-			mrkdwn: true,
-		});
-		// console.log(result);
-	} catch (err) {
-		console.error(err);
-	}
-};
-
 // prints help message
 const help = async () => {
-	sendMessage(channelId, 'You have cried for help!');
+	sendMessage(app, channelId, 'You have cried for help!');
 };
 
 // lists all presentation groups
@@ -34,7 +28,7 @@ const list = async () => {
 	console.log('++ Start: Run `list` ignoring any params.');
 	fs.readdir('./groups', (err, files) => {
 		if (err) {
-			sendMessage(
+			sendMessage(app, 
 				channelId,
 				'Something went wrong while trying to execute `list`.'
 			);
@@ -52,17 +46,18 @@ const list = async () => {
 			message +=
 				'There are no groups to be listed.\nTip: Add a group using `init`.';
 		}
-		sendMessage(channelId, message);
+		sendMessage(app, channelId, message);
 		console.log('++ Success: listed all or no groups.');
 	});
 };
 
+// creates empty group json file
 const init = async (groups) => {
 	process.stdout.write('++ Start: Run `init` with params: ');
 	console.log(groups);
 
 	if (groups.length < 1) {
-		sendMessage(channelId, 'Error: `init` takes one or more arguments.');
+		sendMessage(app, channelId, 'Error: `init` takes one or more arguments.');
 		return;
 	}
 
@@ -72,12 +67,12 @@ const init = async (groups) => {
 			if (err) {
 				// file DNE
 				let fileJSON = {
-					pattern: [],
+					sequence: [],
 					schedule: [],
 				};
 				fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
 					if (err) {
-						sendMessage(
+						sendMessage(app, 
 							channelId,
 							`Something went wrong while creating the group \`${groupName}\`.`
 						);
@@ -85,7 +80,7 @@ const init = async (groups) => {
 						return;
 					}
 				});
-				sendMessage(
+				sendMessage(app, 
 					channelId,
 					`Successfully created the group \`${groupName}\`.`
 				);
@@ -93,7 +88,7 @@ const init = async (groups) => {
 				return;
 			}
 			// file exists
-			sendMessage(
+			sendMessage(app, 
 				channelId,
 				`There already exists a group named \`${groupName}\``
 			);
@@ -102,12 +97,13 @@ const init = async (groups) => {
 	});
 };
 
+// deletes group json file
 const remove = async (groups) => {
 	process.stdout.write('++ Start: Run `remove` with params: ');
 	console.log(groups);
 
 	if (groups.length < 1) {
-		sendMessage(channelId, 'Error: `remove` takes one or more arguments.');
+		sendMessage(app, channelId, 'Error: `remove` takes one or more arguments.');
 		return;
 	}
 
@@ -116,7 +112,7 @@ const remove = async (groups) => {
 		fs.access(dir, fs.F_OK, (err) => {
 			if (err) {
 				// file DNE
-				sendMessage(
+				sendMessage(app, 
 					channelId,
 					`There is no group named \`${groupName}\`.`
 				);
@@ -126,7 +122,7 @@ const remove = async (groups) => {
 			// file exists
 			fs.unlink(dir, (err) => {
 				if (err) {
-					sendMessage(
+					sendMessage(app, 
 						channelId,
 						`Something went wrong while removing \`${groupName}\`.`
 					);
@@ -134,7 +130,7 @@ const remove = async (groups) => {
 					return;
 				}
 			});
-			sendMessage(
+			sendMessage(app, 
 				channelId,
 				`Successfully removed the group \`${groupName}\`.`
 			);
@@ -144,12 +140,13 @@ const remove = async (groups) => {
 	});
 };
 
+// sends message containing >=1 groups' schedule
 const show = async (groups) => {
 	process.stdout.write('++ Start: Run `show` with params: ');
 	console.log(groups);
 
 	if (groups.length < 1) {
-		sendMessage(channelId, 'Error: `show` takes one or more arguments.');
+		sendMessage(app, channelId, 'Error: `show` takes one or more arguments.');
 		return;
 	}
 
@@ -158,7 +155,7 @@ const show = async (groups) => {
 		fs.readFile(dir, (err, data) => {
 			if (err) {
 				// file DNE
-				sendMessage(
+				sendMessage(app, 
 					channelId,
 					`The following group does not exist: \`${groupName}\`.`
 				);
@@ -177,7 +174,7 @@ const show = async (groups) => {
 				message = '(blank)';
 			}
 
-			sendMessage(
+			sendMessage(app, 
 				channelId,
 				`The presentation schedule for \`${groupName}\` is:\n\`\`\`${message}\`\`\``
 			);
@@ -185,6 +182,123 @@ const show = async (groups) => {
 		});
 	});
 };
+
+// args = [house-stark, @arya, @sansa, ...]
+const setSequence = async (args) => {
+	if (args.length == 0) {
+		sendMessage(app, 
+			channelId,
+			'Hint: `<@U024UGA3HB2> setSequence house-stark @arya @sansa ...`'
+		);
+		return;
+	}
+	const groupName = args[0];
+	const groupMembers = args.slice(1, args.length);
+	const dir = './groups/' + groupName + '.json';
+
+	if (!fs.existsSync(dir)) {
+		sendMessage(app, channelId, `There is no group named \`${groupName}\`.`);
+		return;
+	}
+
+	if (groupMembers.length == 0) {
+		sendMessage(app, channelId, 'Please provide at least one group member.');
+		return;
+	}
+
+	// if even just one group member is invalid, do nothing
+	groupMembers.forEach((member) => {
+		if (!(member.startsWith('<@') && member.endsWith('>'))) {
+			sendMessage(app, 
+				channelId,
+				'Please check that all group member arguments are **mentions**.'
+			);
+			return;
+		}
+	});
+
+	fs.readFile(dir, 'utf8', (err, data) => {
+		if (err) {
+			sendMessage(app, 
+				channelId,
+				`Something went wrong while editing \`${groupName}.\``
+			);
+			return;
+		}
+
+		let fileJSON = JSON.parse(data);
+		fileJSON.sequence = groupMembers;
+
+		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
+			if (err) {
+				sendMessage(app, 
+					channelId,
+					`Something went wrong while editing \`${groupName}.\``
+				);
+				return;
+			}
+			sendMessage(app, 
+				channelId,
+				`Updated sequence of the group \`${groupName}\`.`
+			);
+		});
+	});
+};
+
+const setDayOfWeek = async (args) => {
+	if (args.length < 2) {
+		sendMessage(app, 
+			channelId,
+			'Hint: `<@U024UGA3HB2> setDayOfWeek house-stark Thursdays`'
+		);
+		return;
+	}
+
+	const groupName = args[0];
+	let dayOfWeek = args[1];
+	const dir = './groups/' + groupName + '.json';
+
+	if (!fs.existsSync(dir)) {
+		sendMessage(app, channelId, `There is no group named \`${groupName}\`.`);
+		return;
+	}
+
+	dayOfWeek = dayMap[dayOfWeek];
+
+	if (dayOfWeek == undefined) {
+		sendMessage(app, channelId, 'Please provide a valid day of the week.');
+		return;
+	}
+
+	fs.readFile(dir, 'utf8', (err, data) => {
+		if (err) {
+			sendMessage(app, 
+				channelId,
+				`Something went wrong while editing \`${groupName}.\``
+			);
+			return;
+		}
+
+		let fileJSON = JSON.parse(data);
+		fileJSON.dayOfWeek = dayOfWeek;
+
+		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
+			if (err) {
+				sendMessage(app, 
+					channelId,
+					`Something went wrong while editing \`${groupName}.\``
+				);
+				return; // ?
+			}
+			sendMessage(app, 
+				channelId,
+				`Updated dayOfWeek of the group \`${groupName}\`.`
+			);
+		});
+	});
+};
+
+const schedule = async ([user, dayOfWeek]) => {};
 
 const removePre = async (groupName) => {};
 
@@ -200,7 +314,10 @@ const funcMap = {
 	list: list, // list
 	init: init, // init devops best hr ...
 	remove: remove, // remove devops best hr ...
+	rm: remove,
 	show: show,
+	setsequence: setSequence,
+	setdayofweek: setDayOfWeek,
 };
 
 app.event('app_mention', async ({ event, client }) => {
@@ -215,7 +332,7 @@ app.event('app_mention', async ({ event, client }) => {
 			let params = [];
 
 			if (func === undefined) {
-				sendMessage(
+				sendMessage(app, 
 					channelId,
 					'Your first argument should be a command name.'
 				);
