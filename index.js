@@ -50,7 +50,7 @@ const list = async () => {
 			message = 'The groups are:\n```' + message + '```';
 		} else {
 			message +=
-				'There are no groups to be listed.\nTip: Add a group using `init ${groupName}`.';
+				'There are no groups to be listed.\nTip: Add a group using `init`.';
 		}
 		sendMessage(channelId, message);
 		console.log('++ Success: listed all or no groups.');
@@ -71,11 +71,15 @@ const init = async (groups) => {
 		fs.access(dir, fs.F_OK, (err) => {
 			if (err) {
 				// file DNE
-				fs.writeFile(dir, '{}', (err) => {
+				let fileJSON = {
+					pattern: [],
+					schedule: [],
+				};
+				fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
 					if (err) {
 						sendMessage(
 							channelId,
-							`Something went wrong with creating ${groupName}.`
+							`Something went wrong while creating the group \`${groupName}\`.`
 						);
 						console.error(err);
 						return;
@@ -83,7 +87,7 @@ const init = async (groups) => {
 				});
 				sendMessage(
 					channelId,
-					`Successfully created the group ${groupName}.`
+					`Successfully created the group \`${groupName}\`.`
 				);
 				console.log(`++ Success: Create the file: ${dir}.`);
 				return;
@@ -91,7 +95,7 @@ const init = async (groups) => {
 			// file exists
 			sendMessage(
 				channelId,
-				`There already exists a group with the name ${groupName}`
+				`There already exists a group named \`${groupName}\``
 			);
 			console.log('++ Success: Group name taken.');
 		});
@@ -124,7 +128,7 @@ const remove = async (groups) => {
 				if (err) {
 					sendMessage(
 						channelId,
-						`Something went wrong with removing \`${groupName}\`.`
+						`Something went wrong while removing \`${groupName}\`.`
 					);
 					console.error(err);
 					return;
@@ -136,6 +140,48 @@ const remove = async (groups) => {
 			);
 
 			console.log(`++ Success: Removed ${dir}.`);
+		});
+	});
+};
+
+const show = async (groups) => {
+	process.stdout.write('++ Start: Run `show` with params: ');
+	console.log(groups);
+
+	if (groups.length < 1) {
+		sendMessage(channelId, 'Error: `show` takes one or more arguments.');
+		return;
+	}
+
+	groups.forEach((groupName) => {
+		let dir = './groups/' + groupName + '.json';
+		fs.readFile(dir, (err, data) => {
+			if (err) {
+				// file DNE
+				sendMessage(
+					channelId,
+					`The following group does not exist: \`${groupName}\`.`
+				);
+				console.log(`++ Success: Rejected DNE group: ${groupName}.`);
+				return;
+			}
+			// file exists
+			let message = '';
+			data = JSON.parse(data);
+
+			if (data.schedule.length != 0) {
+				data.schedule.forEach((elem) => {
+					message += elem.person + ' : ' + elem.time + '\n';
+				});
+			} else {
+				message = '(blank)';
+			}
+
+			sendMessage(
+				channelId,
+				`The presentation schedule for \`${groupName}\` is:\n\`\`\`${message}\`\`\``
+			);
+			console.log(`++ Success: Showed group schedule for ${groupName}.`);
 		});
 	});
 };
@@ -154,6 +200,7 @@ const funcMap = {
 	list: list, // list
 	init: init, // init devops best hr ...
 	remove: remove, // remove devops best hr ...
+	show: show,
 };
 
 app.event('app_mention', async ({ event, client }) => {
