@@ -23,9 +23,12 @@ const scheduleMessage = async (app, channelId, text, timestamp) => {
 			post_at: timestamp, // unix epoch timestamp format
 		});
 		console.log(result);
+		return result.scheduled_message_id;
 	} catch (err) {
 		console.error(err);
 	}
+
+	return '';
 };
 
 // messages to be sent in 60s will err

@@ -2,6 +2,7 @@ const { App } = require('@slack/bolt');
 const fs = require('fs');
 
 const dayMap = require('./maps/dayMap.js');
+const numToDay = require('./maps/numToDay.js');
 
 const {
 	sendMessage,
@@ -18,8 +19,11 @@ const app = new App({
 	token: token,
 });
 
+// :white_check_mark:
+
 // prints help message
 const help = async () => {
+	console.log('++ Start: Run `help`.');
 	sendMessage(app, channelId, 'You have cried for help!');
 };
 
@@ -28,7 +32,8 @@ const list = async () => {
 	console.log('++ Start: Run `list` ignoring any params.');
 	fs.readdir('./groups', (err, files) => {
 		if (err) {
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
 				'Something went wrong while trying to execute `list`.'
 			);
@@ -47,7 +52,6 @@ const list = async () => {
 				'There are no groups to be listed.\nTip: Add a group using `init`.';
 		}
 		sendMessage(app, channelId, message);
-		console.log('++ Success: listed all or no groups.');
 	});
 };
 
@@ -56,8 +60,13 @@ const init = async (groups) => {
 	process.stdout.write('++ Start: Run `init` with params: ');
 	console.log(groups);
 
-	if (groups.length < 1) {
-		sendMessage(app, channelId, 'Error: `init` takes one or more arguments.');
+	if (groups.length == 0) {
+		sendMessage(
+			app,
+			channelId,
+			'Error: `init` takes one or more arguments.' +
+				'\nHint: `<@U024UGA3HB2> init marketing devops ...'
+		);
 		return;
 	}
 
@@ -67,12 +76,14 @@ const init = async (groups) => {
 			if (err) {
 				// file DNE
 				let fileJSON = {
+					dayOfWeek: -1,
 					sequence: [],
 					schedule: [],
 				};
 				fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
 					if (err) {
-						sendMessage(app, 
+						sendMessage(
+							app,
 							channelId,
 							`Something went wrong while creating the group \`${groupName}\`.`
 						);
@@ -80,19 +91,19 @@ const init = async (groups) => {
 						return;
 					}
 				});
-				sendMessage(app, 
+				sendMessage(
+					app,
 					channelId,
 					`Successfully created the group \`${groupName}\`.`
 				);
-				console.log(`++ Success: Create the file: ${dir}.`);
 				return;
 			}
 			// file exists
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
 				`There already exists a group named \`${groupName}\``
 			);
-			console.log('++ Success: Group name taken.');
 		});
 	});
 };
@@ -102,8 +113,13 @@ const remove = async (groups) => {
 	process.stdout.write('++ Start: Run `remove` with params: ');
 	console.log(groups);
 
-	if (groups.length < 1) {
-		sendMessage(app, channelId, 'Error: `remove` takes one or more arguments.');
+	if (groups.length == 0) {
+		sendMessage(
+			app,
+			channelId,
+			'Error: `remove` takes one or more arguments.' +
+				'\nHint: `<@U024UGA3HB2> remove house-bolton house-martell ...`'
+		);
 		return;
 	}
 
@@ -112,17 +128,18 @@ const remove = async (groups) => {
 		fs.access(dir, fs.F_OK, (err) => {
 			if (err) {
 				// file DNE
-				sendMessage(app, 
+				sendMessage(
+					app,
 					channelId,
 					`There is no group named \`${groupName}\`.`
 				);
-				console.log('++ Success: Removed nothing.');
 				return;
 			}
 			// file exists
 			fs.unlink(dir, (err) => {
 				if (err) {
-					sendMessage(app, 
+					sendMessage(
+						app,
 						channelId,
 						`Something went wrong while removing \`${groupName}\`.`
 					);
@@ -130,12 +147,11 @@ const remove = async (groups) => {
 					return;
 				}
 			});
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
 				`Successfully removed the group \`${groupName}\`.`
 			);
-
-			console.log(`++ Success: Removed ${dir}.`);
 		});
 	});
 };
@@ -145,8 +161,13 @@ const show = async (groups) => {
 	process.stdout.write('++ Start: Run `show` with params: ');
 	console.log(groups);
 
-	if (groups.length < 1) {
-		sendMessage(app, channelId, 'Error: `show` takes one or more arguments.');
+	if (groups.length == 0) {
+		sendMessage(
+			app,
+			channelId,
+			'Error: `show` takes one or more arguments.' +
+				'\nHint: `<@U024UGA3HB2> show house-lannister house-baratheon ...`'
+		);
 		return;
 	}
 
@@ -155,40 +176,67 @@ const show = async (groups) => {
 		fs.readFile(dir, (err, data) => {
 			if (err) {
 				// file DNE
-				sendMessage(app, 
+				sendMessage(
+					app,
 					channelId,
 					`The following group does not exist: \`${groupName}\`.`
 				);
-				console.log(`++ Success: Rejected DNE group: ${groupName}.`);
 				return;
 			}
 			// file exists
-			let message = '';
+			let message = 'SCHEDULE:\n';
 			data = JSON.parse(data);
 
 			if (data.schedule.length != 0) {
 				data.schedule.forEach((elem) => {
-					message += elem.person + ' : ' + elem.time + '\n';
+					let date = new Date(elem.presentationTime * 1000);
+					let datestring =
+						('0' + date.getDate()).slice(-2) +
+						'/' +
+						('0' + (date.getMonth() + 1)).slice(-2) +
+						'/' +
+						date.getFullYear();
+					message += datestring + ' | ' + elem.person + '\n';
 				});
 			} else {
-				message = '(blank)';
+				message += '(blank)\n';
 			}
 
-			sendMessage(app, 
+			message += '\nSEQUENCE:\n';
+			if (data.sequence.length) {
+				message += `${JSON.stringify(data.sequence)}\n\n`;
+			} else {
+				message += `(blank)\n\n`;
+			}
+
+			message += 'DAY OF WEEK:\n';
+			if (numToDay[data.dayOfWeek]) {
+				message += `${numToDay[data.dayOfWeek]}\n`;
+			} else {
+				message += `(blank)\n`;
+			}
+
+			sendMessage(
+				app,
 				channelId,
 				`The presentation schedule for \`${groupName}\` is:\n\`\`\`${message}\`\`\``
 			);
-			console.log(`++ Success: Showed group schedule for ${groupName}.`);
 		});
 	});
 };
 
-// args = [house-stark, @arya, @sansa, ...]
+// write the value of sequence in a group's file
 const setSequence = async (args) => {
+	// args = [house-stark, @arya, @sansa, ...]
+	process.stdout.write('++ Start: Run `setSequence` with params: ');
+	console.log(args);
+
 	if (args.length == 0) {
-		sendMessage(app, 
+		sendMessage(
+			app,
 			channelId,
-			'Hint: `<@U024UGA3HB2> setSequence house-stark @arya @sansa ...`'
+			'Error: `setSequence` takes a group name and at least one user mention.' +
+				'Hint: `<@U024UGA3HB2> setSequence house-stark @Arya @Robb ...`'
 		);
 		return;
 	}
@@ -197,32 +245,44 @@ const setSequence = async (args) => {
 	const dir = './groups/' + groupName + '.json';
 
 	if (!fs.existsSync(dir)) {
-		sendMessage(app, channelId, `There is no group named \`${groupName}\`.`);
+		sendMessage(
+			app,
+			channelId,
+			`There is no group named \`${groupName}\`.`
+		);
 		return;
 	}
 
 	if (groupMembers.length == 0) {
-		sendMessage(app, channelId, 'Please provide at least one group member.');
+		sendMessage(
+			app,
+			channelId,
+			'Please provide at least one group member.'
+		);
 		return;
 	}
 
-	// if even just one group member is invalid, do nothing
-	groupMembers.forEach((member) => {
+	// check every member is a mention or else we return
+	for (let i = 0; i < groupMembers.length; i++) {
+		let member = groupMembers[i];
 		if (!(member.startsWith('<@') && member.endsWith('>'))) {
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
-				'Please check that all group member arguments are **mentions**.'
+				'Please check that all group member arguments are *mentions*.'
 			);
 			return;
 		}
-	});
+	}
 
 	fs.readFile(dir, 'utf8', (err, data) => {
 		if (err) {
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
 				`Something went wrong while editing \`${groupName}.\``
 			);
+			console.error(err);
 			return;
 		}
 
@@ -231,25 +291,36 @@ const setSequence = async (args) => {
 
 		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
 			if (err) {
-				sendMessage(app, 
+				sendMessage(
+					app,
 					channelId,
 					`Something went wrong while editing \`${groupName}.\``
 				);
+				console.error(err);
 				return;
 			}
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
-				`Updated sequence of the group \`${groupName}\`.`
+				`Updated sequence of the group \`${groupName}\`.` +
+					`\nHint: Use \`<@U024UGA3HB2> show ${groupName}\` to see the updated schedule.`
 			);
 		});
 	});
 };
 
+// write the value of dayOfWeek in a group's file
 const setDayOfWeek = async (args) => {
+	// args = [house-stark, thursday, (the rest is ignored)]
+	process.stdout.write('++ Start: Run `setDayOfWeek` with params: ');
+	console.log(args);
+
 	if (args.length < 2) {
-		sendMessage(app, 
+		sendMessage(
+			app,
 			channelId,
-			'Hint: `<@U024UGA3HB2> setDayOfWeek house-stark Thursdays`'
+			'Error: `setDayOfWeek` takes a group name and a weekday.' +
+				'\nHint: `<@U024UGA3HB2> setDayOfWeek house-stark Thursdays`'
 		);
 		return;
 	}
@@ -259,7 +330,11 @@ const setDayOfWeek = async (args) => {
 	const dir = './groups/' + groupName + '.json';
 
 	if (!fs.existsSync(dir)) {
-		sendMessage(app, channelId, `There is no group named \`${groupName}\`.`);
+		sendMessage(
+			app,
+			channelId,
+			`There is no group named \`${groupName}\`.`
+		);
 		return;
 	}
 
@@ -272,10 +347,12 @@ const setDayOfWeek = async (args) => {
 
 	fs.readFile(dir, 'utf8', (err, data) => {
 		if (err) {
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
 				`Something went wrong while editing \`${groupName}.\``
 			);
+			console.error(err);
 			return;
 		}
 
@@ -284,15 +361,172 @@ const setDayOfWeek = async (args) => {
 
 		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
 			if (err) {
-				sendMessage(app, 
+				sendMessage(
+					app,
 					channelId,
 					`Something went wrong while editing \`${groupName}.\``
 				);
-				return; // ?
+				console.error(err);
+				return;
 			}
-			sendMessage(app, 
+			sendMessage(
+				app,
 				channelId,
-				`Updated dayOfWeek of the group \`${groupName}\`.`
+				`Updated \`DAY OF WEEK\` of the group \`${groupName}\` to be \`${numToDay[dayOfWeek]}\`.`
+			);
+		});
+	});
+};
+
+const enqueue = async (args) => {
+	// args = [groupName1, groupName2, ...]
+	process.stdout.write('++ Start: Run `enqueue` with params:');
+	console.log(args);
+
+	if (args.length == 0) {
+		sendMessage(
+			app,
+			channelId,
+			'Error: `enqueue` takes one or more arguments.' +
+				'\nHint: `<@U024UGA3HB2> enqueue devops`'
+		);
+		return;
+	}
+
+	args.forEach((groupName) => {
+		const dir = './groups/' + groupName + '.json';
+
+		if (!fs.existsSync(dir)) {
+			sendMessage(
+				app,
+				channelId,
+				`There is no group named \`${groupName}\`.`
+			);
+			return;
+		}
+
+		fs.readFile(dir, 'utf8', (err, data) => {
+			if (err) {
+				sendMessage(
+					app,
+					channelId,
+					`Something went wrong while editing \`${groupName}.\``
+				);
+				console.error(err);
+				return;
+			}
+
+			let fileJSON = JSON.parse(data);
+
+			if (fileJSON.sequence.length == 0) {
+				sendMessage(
+					app,
+					channelId,
+					`There is no \`sequence\` to \`enqueue\` for the group \`${groupName}\`.`
+				);
+				return;
+			}
+
+			if (fileJSON.dayOfWeek == -1) {
+				sendMessage(
+					app,
+					channelId,
+					`The \`dayOfWeek\` is not specificed for the group \`${groupName}\`.`
+				);
+				return;
+			}
+
+			let daySkip = 0;
+			fileJSON.sequence.forEach((person) => {
+				// determine what time reminders will be scheduled
+				let twoDayReminder;
+				let weeklyReminder;
+				let sched = fileJSON.schedule;
+
+				if (sched.length == 0) {
+					twoDayReminder = new Date();
+					twoDayReminder.setHours(9, 0, 0, 0);
+
+					while (
+						(twoDayReminder.getDay() + 2) % 7 !=
+						fileJSON.dayOfWeek
+					) {
+						twoDayReminder.setDate(
+							twoDayReminder.getDate() + daySkip + 1
+						);
+					}
+
+					weeklyReminder = new Date(twoDayReminder);
+					weeklyReminder.setDate(
+						twoDayReminder.getDate() - twoDayReminder.getDay() + 1
+					);
+				} else {
+					twoDayReminder = new Date(
+						sched[sched.length - 1].twoDayTime * 1000
+					);
+					weeklyReminder = new Date(
+						sched[sched.length - 1].weeklyTime * 1000
+					);
+
+					twoDayReminder.setDate(twoDayReminder.getDate() + daySkip + 7);
+					weeklyReminder.setDate(weeklyReminder.getDate() + daySkip + 7);
+				}
+				daySkip += 7;
+				twoDayReminder = twoDayReminder.getTime() / 1000;
+				weeklyReminder = weeklyReminder.getTime() / 1000;
+
+				// schedule the messages
+				// todo: should be PM'ed
+				let twoDay_scheduled_message_id;
+				let weekly_scheduled_message_id;
+
+				(async () => {
+					twoDay_scheduled_message_id = await scheduleMessage(
+						app,
+						channelId,
+						`${person} You have a presentation in two days!`,
+						twoDayReminder
+					);
+					weekly_scheduled_message_id = await scheduleMessage(
+						app,
+						channelId,
+						`${person} You have a presentation this week!`,
+						weeklyReminder
+					);
+
+					sched.push({
+						person: person,
+						twoDayTime: twoDayReminder,
+						weeklyTime: weeklyReminder,
+						presentationTime: twoDayReminder + 172800,
+						twoDay_scheduled_message_id:
+							twoDay_scheduled_message_id,
+						weekly_scheduled_message_id:
+							weekly_scheduled_message_id,
+					});
+
+					fs.writeFileSync(
+						dir,
+						JSON.stringify(fileJSON, null, 2),
+						(err) => {
+							if (err) {
+								sendMessage(
+									app,
+									channelId,
+									`Something went wrong while editing \`${groupName}.\``
+								);
+								console.error(err);
+								return;
+							}
+						}
+					);
+				})();
+			});
+			sendMessage(
+				app,
+				channelId,
+				`Updated the schedule of \`${groupName}\`.` +
+					`\nHint: Use \`<@U024UGA3HB2> show ${groupName}\` to see the updated schedule.`
 			);
 		});
 	});
@@ -318,6 +552,7 @@ const funcMap = {
 	show: show,
 	setsequence: setSequence,
 	setdayofweek: setDayOfWeek,
+	enqueue: enqueue,
 };
 
 app.event('app_mention', async ({ event, client }) => {
@@ -332,7 +567,8 @@ app.event('app_mention', async ({ event, client }) => {
 			let params = [];
 
 			if (func === undefined) {
-				sendMessage(app, 
+				sendMessage(
+					app,
 					channelId,
 					'Your first argument should be a command name.'
 				);
@@ -348,8 +584,8 @@ app.event('app_mention', async ({ event, client }) => {
 
 			await func(params);
 		}
-	} catch (error) {
-		console.error(error);
+	} catch (err) {
+		console.error(err);
 	}
 });
 
@@ -399,8 +635,8 @@ app.event('app_home_opened', async ({ event, client, context }) => {
 				],
 			},
 		});
-	} catch (error) {
-		console.error(error);
+	} catch (err) {
+		console.error(err);
 	}
 });
 

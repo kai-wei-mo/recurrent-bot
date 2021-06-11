@@ -1,13 +1,35 @@
 {
-	"pattern": "tag tag tag",
-	"schedule": [
+	"dayOfWeek": 3,
+	"sequence": [
+		"<@U022G2KBP98>",
+		"<@U022G2KBP98>",
+		"<@U024UGA3HB2>",
+		"<@U024UGA3HB2>"
+	],
+	"schedule": [ // not ordered in any way
 		{
-			"person": "<@U024UGA3HB2>",
-			"time": "timestamp"
+			"person": "<@U022G2KBP98>",
+			"twoDayTime": 1625907600,
+			"weeklyTime": 1625475600,
+			"presentationTime": 1626080400,
+			"twoDay_scheduled_message_id": "Q0256G025C1", // may be emptystring
+			"weekly_scheduled_message_id": "Q024D4KM7SB" // may be emptystring
 		},
 		{
-			"person": "tag",
-			"time": "timestamp"
+			"person": "<@U024UGA3HB2>",
+			"twoDayTime": 1627117200,
+			"weeklyTime": 1626685200,
+			"presentationTime": 1627290000,
+			"twoDay_scheduled_message_id": "Q024U42LLAX",
+			"weekly_scheduled_message_id": "Q024D4KM9KR"
+		},
+		{
+			"person": "<@U024UGA3HB2>",
+			"twoDayTime": 1627722000,
+			"weeklyTime": 1627290000,
+			"presentationTime": 1627894800,
+			"twoDay_scheduled_message_id": "Q024D4KLYKH",
+			"weekly_scheduled_message_id": "Q024TT6RHA6"
 		}
 	]
 }
