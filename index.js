@@ -1,5 +1,6 @@
 const { App } = require('@slack/bolt');
 const fs = require('fs');
+const keepAlive = require('./keepAlive.js');
 
 const dayMap = require('./maps/dayMap.js');
 const numToDay = require('./maps/numToDay.js');
@@ -125,33 +126,71 @@ const remove = async (groups) => {
 
 	groups.forEach((groupName) => {
 		let dir = './groups/' + groupName + '.json';
-		fs.access(dir, fs.F_OK, (err) => {
+		fs.readFile(dir, (err, data) => {
 			if (err) {
 				// file DNE
 				sendMessage(
 					app,
 					channelId,
-					`There is no group named \`${groupName}\`.`
+					`The following group does not exist: \`${groupName}\`.`
 				);
 				return;
 			}
 			// file exists
-			fs.unlink(dir, (err) => {
-				if (err) {
+			schedule = JSON.parse(data).schedule;
+			schedule
+				.forEach((event) => {
+					deleteScheduledMessage(app, channelId, event.twoDayTime);
+					deleteScheduledMessage(app, channelId, event.weeklyTime);
+				})
+				.then(() => {
+					fs.unlink(dir, (err) => {
+						if (err) {
+							sendMessage(
+								app,
+								channelId,
+								`Something went wrong while removing \`${groupName}\`.`
+							);
+							console.error(err);
+							return;
+						}
+					});
 					sendMessage(
 						app,
 						channelId,
-						`Something went wrong while removing \`${groupName}\`.`
+						`Successfully removed the group \`${groupName}\`.`
 					);
-					console.error(err);
-					return;
-				}
-			});
-			sendMessage(
-				app,
-				channelId,
-				`Successfully removed the group \`${groupName}\`.`
-			);
+				});
+		});
+	});
+};
+
+// called by `show`
+const _cleanSchedule = async (dir) => {
+	fs.readFile(dir, 'utf8', (err, data) => {
+		if (err) {
+			console.error(err);
+			return;
+		}
+
+		let fileJSON = JSON.parse(data);
+		let newSchedule = [];
+		fileJSON.schedule.forEach((event) => {
+			if (event.presentationTime > new Date().getTime() / 1000 + 86400) {
+				newSchedule.push(event);
+			}
+		});
+		
+		// order by presentation times
+		newSchedule.sort((a, b) => a.presentationTime > b.presentationTime && 1 || -1);
+
+		fileJSON.schedule = newSchedule;
+
+		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
+			if (err) {
+				console.error(err);
+				return;
+			}
 		});
 	});
 };
@@ -222,6 +261,7 @@ const show = async (groups) => {
 				`The presentation schedule for \`${groupName}\` is:\n\`\`\`${message}\`\`\``
 			);
 		});
+		_cleanSchedule(dir);
 	});
 };
 
@@ -431,7 +471,7 @@ const enqueue = async (args) => {
 				sendMessage(
 					app,
 					channelId,
-					`The \`dayOfWeek\` is not specificed for the group \`${groupName}\`.`
+					`The \`dayOfWeek\` is not specified for the group \`${groupName}\`.`
 				);
 				return;
 			}
@@ -445,7 +485,7 @@ const enqueue = async (args) => {
 
 				if (sched.length == 0) {
 					twoDayReminder = new Date();
-					twoDayReminder.setHours(9, 0, 0, 0);
+					twoDayReminder.setHours(13, 0, 0, 0); // 1300 GMT == 0900 EST
 
 					while (
 						(twoDayReminder.getDay() + 2) % 7 !=
@@ -468,8 +508,12 @@ const enqueue = async (args) => {
 						sched[sched.length - 1].weeklyTime * 1000
 					);
 
-					twoDayReminder.setDate(twoDayReminder.getDate() + daySkip + 7);
-					weeklyReminder.setDate(weeklyReminder.getDate() + daySkip + 7);
+					twoDayReminder.setDate(
+						twoDayReminder.getDate() + daySkip + 7
+					);
+					weeklyReminder.setDate(
+						weeklyReminder.getDate() + daySkip + 7
+					);
 				}
 				daySkip += 7;
 				twoDayReminder = twoDayReminder.getTime() / 1000;
@@ -532,24 +576,17 @@ const enqueue = async (args) => {
 	});
 };
 
-const schedule = async ([user, dayOfWeek]) => {};
-
-const removePre = async (groupName) => {};
-
-/*
-app.event('app_home_opened', ({ event, say }) => {
-	console.log(event);
-	say(`Hello, <@${event.user}>!`);
-});
-*/
+const holiday = async (args) => {};
 
 const funcMap = {
-	help: help, // help
-	list: list, // list
-	init: init, // init devops best hr ...
-	remove: remove, // remove devops best hr ...
-	rm: remove,
+	// general
+	help: help,
+	list: list,
+	// create/delete/read groups
+	init: init,
+	remove: remove,
 	show: show,
+	// modify details of a group
 	setsequence: setSequence,
 	setdayofweek: setDayOfWeek,
 	enqueue: enqueue,
@@ -561,29 +598,27 @@ app.event('app_mention', async ({ event, client }) => {
 		let msgTokens = event.text.split(' ');
 		msgTokens.shift(); // remove the app mention
 
-		while (msgTokens.length) {
-			let token = msgTokens.shift().toLowerCase();
-			let func = funcMap[token];
-			let params = [];
-
-			if (func === undefined) {
-				sendMessage(
-					app,
-					channelId,
-					'Your first argument should be a command name.'
-				);
-				return;
-			}
-
-			while (msgTokens.length) {
-				if (funcMap[msgTokens[0]] != undefined) {
-					break;
-				}
-				params = params.concat([msgTokens.shift()]);
-			}
-
-			await func(params);
+		if (msgTokens.length == 0) {
+			return;
 		}
+
+		let func = funcMap[msgTokens.shift()];
+		let params = [];
+
+		if (func === undefined) {
+			sendMessage(
+				app,
+				channelId,
+				'Your first argument should be a command name.'
+			);
+			return;
+		}
+
+		while (msgTokens.length) {
+			params.push(msgTokens.shift());
+		}
+
+		func(params);
 	} catch (err) {
 		console.error(err);
 	}
@@ -591,23 +626,19 @@ app.event('app_mention', async ({ event, client }) => {
 
 app.event('app_home_opened', async ({ event, client, context }) => {
 	try {
-		/* view.publish is the method that your app uses to push a view to the Home tab */
 		const result = await client.views.publish({
-			/* the user that opened your app's app home */
 			user_id: event.user,
 
-			/* the view object that appears in the app home*/
 			view: {
 				type: 'home',
 				callback_id: 'home_view',
 
-				/* body of the view */
 				blocks: [
 					{
 						type: 'section',
 						text: {
 							type: 'mrkdwn',
-							text: "*Welcome to your _App's Home_* :tada:",
+							text: '*Weekly Presentations Documentation* :tada:',
 						},
 					},
 					{
@@ -617,7 +648,7 @@ app.event('app_home_opened', async ({ event, client, context }) => {
 						type: 'section',
 						text: {
 							type: 'mrkdwn',
-							text: "This button won't do much for now but you can set up a listener for it using the `actions()` method and passing its unique `action_id`. See an example in the `examples` folder within your Bolt app.",
+							text: 'To use Weekly Presentations Bot, go to the workspace text channel designated for Weekly Presentations bot spam.',
 						},
 					},
 					{
