@@ -1,25 +1,22 @@
 {
 	"dayOfWeek": 2,
-	"sequence": [
-	  "<@U022G2KBP98>",
-	  "<@U024UGA3HB2>"
-	],
-	"schedule": [ // ordered chronologically after calling `show`
-	  {
-		"person": "<@U022G2KBP98>",
-		"twoDayTime": 1623589200,
-		"weeklyTime": 1623675600,
-		"presentationTime": 1623762000,
-		"twoDay_scheduled_message_id": "Q024SGPCUPP", // may be emptystring if this should be in the past
-		"weekly_scheduled_message_id": "Q024VJWPHDG"  // may be emptystring if this should be in the past
-	  },
-	  {
-		"person": "<@U024UGA3HB2>",
-		"twoDayTime": 1624194000,
-		"weeklyTime": 1624280400,
-		"presentationTime": 1624366800,
-		"twoDay_scheduled_message_id": "Q024SGPCW5B",
-		"weekly_scheduled_message_id": "Q0251PSL6P6"
-	  }
+	"sequence": ["<@U022G2KBP98>", "<@U024UGA3HB2>"],
+	"schedule": [
+		{
+			"person": "<@U022G2KBP98>",
+			"twoDayTime": 1623589200,
+			"weeklyTime": 1623675600,
+			"presentationTime": 1623762000,
+			"twoDay_scheduled_message_id": "Q024SGPCUPP",
+			"weekly_scheduled_message_id": "Q024VJWPHDG"
+		},
+		{
+			"person": "<@U024UGA3HB2>",
+			"twoDayTime": 1624194000,
+			"weeklyTime": 1624280400,
+			"presentationTime": 1624366800,
+			"twoDay_scheduled_message_id": "Q024SGPCW5B",
+			"weekly_scheduled_message_id": "Q0251PSL6P6"
+		}
 	]
-  }
+}

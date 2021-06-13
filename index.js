@@ -1,6 +1,5 @@
 const { App } = require('@slack/bolt');
 const fs = require('fs');
-const keepAlive = require('./keepAlive.js');
 
 const dayMap = require('./maps/dayMap.js');
 const numToDay = require('./maps/numToDay.js');
@@ -25,10 +24,43 @@ const app = new App({
 // prints help message
 const help = async () => {
 	console.log('++ Start: Run `help`.');
-	sendMessage(app, channelId, 'You have cried for help!');
+
+	let message = `COMMMANDS:`;
+	message += `\n\n\`help\``;
+	message += `\n• displays this very message`;
+
+	message += `\n\n\`list\``;
+	message += `\n• lists all presentation groups`;
+
+	message += `\n\n\`init group1 *(group2 group3 ...)\``;
+	message += `\n• creates one (or more) presentation groups with the specified name(s)`;
+
+	message += `\n\n\`remove group1 *(group2 group3 ...)\``;
+	message += `\n• removes one (or more) presentation groups with the specified name(s)`;
+
+	message += `\n\n\`show group1 *(group2 group3 ...)\``;
+	message += `\n• shows the scheduling information for the specified presentation group(s)`;
+
+	message += `\n\n\`setSequence group1 @Robb *(@Sansa @Arya ...)\``;
+	message += `\n• sets the core pattern of a group's presentation sequence`;
+	message += `\n• this sequence of group members is used in \`enqueue\``;
+
+	message += `\n\n\`setDayOfWeek group1 Thursdays\``;
+	message += `\n• sets the day of week on which a group presents`;
+	message += `\n• reminders are sent two days before your presentation, and the Monday of your two-day reminder.`;
+
+	message += `\n\n\`enqueue group1 *(group2 group3 ...)\``;
+	message += `\n• adds each group member in a group's \`sequence\` to that group's presentation schedule`;
+
+	message += `\n\n\nMISC:`;
+	message += `\n• commands are not case sensitive but their arguments are`;
+	message += `\n• commands and parameters are parsed by whitespace`;
+	message += `\n• this bot will only read messages in its channel that @mention the bot`;
+	message += `\n• this bot will send you reminders as direct messages`;
+	sendMessage(app, channelId, message);
 };
 
-// lists all presentation groups
+// lists all presentation group names
 const list = async () => {
 	console.log('++ Start: Run `list` ignoring any params.');
 	fs.readdir('./groups', (err, files) => {
@@ -56,7 +88,7 @@ const list = async () => {
 	});
 };
 
-// creates empty group json file
+// initializes group json file
 const init = async (groups) => {
 	process.stdout.write('++ Start: Run `init` with params: ');
 	console.log(groups);
@@ -109,7 +141,7 @@ const init = async (groups) => {
 	});
 };
 
-// deletes group json file
+// deletes group json file and unschedules its associated messages
 const remove = async (groups) => {
 	process.stdout.write('++ Start: Run `remove` with params: ');
 	console.log(groups);
@@ -138,34 +170,39 @@ const remove = async (groups) => {
 			}
 			// file exists
 			schedule = JSON.parse(data).schedule;
-			schedule
-				.forEach((event) => {
-					deleteScheduledMessage(app, channelId, event.twoDayTime);
-					deleteScheduledMessage(app, channelId, event.weeklyTime);
-				})
-				.then(() => {
-					fs.unlink(dir, (err) => {
-						if (err) {
-							sendMessage(
-								app,
-								channelId,
-								`Something went wrong while removing \`${groupName}\`.`
-							);
-							console.error(err);
-							return;
-						}
-					});
+			schedule.forEach((event) => {
+				deleteScheduledMessage(
+					app,
+					event.person.substring(2, event.person.length - 1),
+					event.twoDay_scheduled_message_id
+				);
+				deleteScheduledMessage(
+					app,
+					event.person.substring(2, event.person.length - 1),
+					event.weekly_scheduled_message_id
+				);
+			});
+			fs.unlink(dir, (err) => {
+				if (err) {
 					sendMessage(
 						app,
 						channelId,
-						`Successfully removed the group \`${groupName}\`.`
+						`Something went wrong while removing \`${groupName}\`.`
 					);
-				});
+					console.error(err);
+					return;
+				}
+			});
+			sendMessage(
+				app,
+				channelId,
+				`Successfully removed the group \`${groupName}\`.`
+			);
 		});
 	});
 };
 
-// called by `show`
+// called by `show` to remove past events and order remaining events chronologically
 const _cleanSchedule = async (dir) => {
 	fs.readFile(dir, 'utf8', (err, data) => {
 		if (err) {
@@ -180,9 +217,11 @@ const _cleanSchedule = async (dir) => {
 				newSchedule.push(event);
 			}
 		});
-		
+
 		// order by presentation times
-		newSchedule.sort((a, b) => a.presentationTime > b.presentationTime && 1 || -1);
+		newSchedule.sort(
+			(a, b) => (a.presentationTime > b.presentationTime && 1) || -1
+		);
 
 		fileJSON.schedule = newSchedule;
 
@@ -195,7 +234,7 @@ const _cleanSchedule = async (dir) => {
 	});
 };
 
-// sends message containing >=1 groups' schedule
+// sends message containing >=1 groups' information
 const show = async (groups) => {
 	process.stdout.write('++ Start: Run `show` with params: ');
 	console.log(groups);
@@ -223,7 +262,7 @@ const show = async (groups) => {
 				return;
 			}
 			// file exists
-			let message = 'SCHEDULE:\n';
+			let message = 'SCHEDULE (dd/mm/yyyy):\n';
 			data = JSON.parse(data);
 
 			if (data.schedule.length != 0) {
@@ -265,7 +304,7 @@ const show = async (groups) => {
 	});
 };
 
-// write the value of sequence in a group's file
+// set the value of sequence in a group's file
 const setSequence = async (args) => {
 	// args = [house-stark, @arya, @sansa, ...]
 	process.stdout.write('++ Start: Run `setSequence` with params: ');
@@ -349,7 +388,7 @@ const setSequence = async (args) => {
 	});
 };
 
-// write the value of dayOfWeek in a group's file
+// set the value of dayOfWeek in a group's file
 const setDayOfWeek = async (args) => {
 	// args = [house-stark, thursday, (the rest is ignored)]
 	process.stdout.write('++ Start: Run `setDayOfWeek` with params: ');
@@ -418,6 +457,7 @@ const setDayOfWeek = async (args) => {
 	});
 };
 
+// schedules reminder messages based on the sequence of a group
 const enqueue = async (args) => {
 	// args = [groupName1, groupName2, ...]
 	process.stdout.write('++ Start: Run `enqueue` with params:');
@@ -520,21 +560,20 @@ const enqueue = async (args) => {
 				weeklyReminder = weeklyReminder.getTime() / 1000;
 
 				// schedule the messages
-				// todo: should be PM'ed
 				let twoDay_scheduled_message_id;
 				let weekly_scheduled_message_id;
 
 				(async () => {
 					twoDay_scheduled_message_id = await scheduleMessage(
 						app,
-						channelId,
-						`${person} You have a presentation in two days!`,
+						person.substring(2, person.length - 1),
+						`${person} You have a presentation in two days for \`${groupName}\`!`,
 						twoDayReminder
 					);
 					weekly_scheduled_message_id = await scheduleMessage(
 						app,
-						channelId,
-						`${person} You have a presentation this week!`,
+						person.substring(2, person.length - 1),
+						`${person} You have a presentation this week for \`${groupName}\`!`,
 						weeklyReminder
 					);
 
@@ -638,7 +677,7 @@ app.event('app_home_opened', async ({ event, client, context }) => {
 						type: 'section',
 						text: {
 							type: 'mrkdwn',
-							text: '*Weekly Presentations Documentation* :tada:',
+							text: '*Weekly Presentations* :tada:',
 						},
 					},
 					{
@@ -648,20 +687,11 @@ app.event('app_home_opened', async ({ event, client, context }) => {
 						type: 'section',
 						text: {
 							type: 'mrkdwn',
-							text: 'To use Weekly Presentations Bot, go to the workspace text channel designated for Weekly Presentations bot spam.',
+							text:
+								'To use Weekly Presentations Bot:' +
+								'\n1. Go to the workspace channel that this bot is assigned to.' +
+								'\n2. Send the message `@Weekly Presentations help` (make sure you *mention* the bot).',
 						},
-					},
-					{
-						type: 'actions',
-						elements: [
-							{
-								type: 'button',
-								text: {
-									type: 'plain_text',
-									text: 'Click me!',
-								},
-							},
-						],
 					},
 				],
 			},
