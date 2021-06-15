@@ -13,6 +13,7 @@ const {
 const signingSecret = process.env['signingSecret'];
 const token = process.env['token'];
 const channelId = process.env['channelId'];
+const botMention = process.env['botMention'];
 
 const app = new App({
 	signingSecret: signingSecret,
@@ -98,7 +99,7 @@ const init = async (groups) => {
 			app,
 			channelId,
 			'Error: `init` takes one or more arguments.' +
-				'\nHint: `<@U024UGA3HB2> init marketing devops ...'
+				`\nHint: \`${botMention} init house-lannister house-baratheon ...\``
 		);
 		return;
 	}
@@ -151,7 +152,7 @@ const remove = async (groups) => {
 			app,
 			channelId,
 			'Error: `remove` takes one or more arguments.' +
-				'\nHint: `<@U024UGA3HB2> remove house-bolton house-martell ...`'
+				`\nHint: \`${botMention} remove house-bolton house-martell ...\``
 		);
 		return;
 	}
@@ -244,7 +245,7 @@ const show = async (groups) => {
 			app,
 			channelId,
 			'Error: `show` takes one or more arguments.' +
-				'\nHint: `<@U024UGA3HB2> show house-lannister house-baratheon ...`'
+				`\nHint: \`${botMention} show house-lannister house-baratheon ...\``
 		);
 		return;
 	}
@@ -315,7 +316,7 @@ const setSequence = async (args) => {
 			app,
 			channelId,
 			'Error: `setSequence` takes a group name and at least one user mention.' +
-				'Hint: `<@U024UGA3HB2> setSequence house-stark @Arya @Robb ...`'
+				`\nHint: \`${botMention} setSequence house-stark @Arya @Robb ...\``
 		);
 		return;
 	}
@@ -382,7 +383,7 @@ const setSequence = async (args) => {
 				app,
 				channelId,
 				`Updated sequence of the group \`${groupName}\`.` +
-					`\nHint: Use \`<@U024UGA3HB2> show ${groupName}\` to see the updated schedule.`
+					`\nHint: Use \`${botMention} show ${groupName}\` to see the updated schedule.`
 			);
 		});
 	});
@@ -399,7 +400,7 @@ const setDayOfWeek = async (args) => {
 			app,
 			channelId,
 			'Error: `setDayOfWeek` takes a group name and a weekday.' +
-				'\nHint: `<@U024UGA3HB2> setDayOfWeek house-stark Thursdays`'
+				`\nHint: \`${botMention} setDayOfWeek house-stark Thursdays\``
 		);
 		return;
 	}
@@ -468,7 +469,7 @@ const enqueue = async (args) => {
 			app,
 			channelId,
 			'Error: `enqueue` takes one or more arguments.' +
-				'\nHint: `<@U024UGA3HB2> enqueue devops`'
+				`\nHint: \`${botMention} enqueue house-targaryen house-stark ...\``
 		);
 		return;
 	}
@@ -609,7 +610,7 @@ const enqueue = async (args) => {
 				app,
 				channelId,
 				`Updated the schedule of \`${groupName}\`.` +
-					`\nHint: Use \`<@U024UGA3HB2> show ${groupName}\` to see the updated schedule.`
+					`\nHint: Use \`${botMention} show ${groupName}\` to see the updated schedule.`
 			);
 		});
 	});
@@ -690,7 +691,8 @@ app.event('app_home_opened', async ({ event, client, context }) => {
 							text:
 								'To use Weekly Presentations Bot:' +
 								'\n1. Go to the workspace channel that this bot is assigned to.' +
-								'\n2. Send the message `@Weekly Presentations help` (make sure you *mention* the bot).',
+								`\n2. Send the message \`${botMention} help\` for documentation.` +
+								`\n3. For more information, visit the GitHub repo (https://github.com/kai-wei-mo/recurrent-bot).`,
 						},
 					},
 				],
