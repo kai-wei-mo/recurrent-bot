@@ -1,22 +1,25 @@
 {
-	"dayOfWeek": 2,
-	"sequence": ["<@U022G2KBP98>", "<@U024UGA3HB2>"],
+	"dayOfWeek": 6,
+	"sequence": [
+	  "U022G2KBP98",
+	  "U024UGA3HB2"
+	],
 	"schedule": [
-		{
-			"person": "<@U022G2KBP98>",
-			"twoDayTime": 1623589200,
-			"weeklyTime": 1623675600,
-			"presentationTime": 1623762000,
-			"twoDay_scheduled_message_id": "Q024SGPCUPP",
-			"weekly_scheduled_message_id": "Q024VJWPHDG"
-		},
-		{
-			"person": "<@U024UGA3HB2>",
-			"twoDayTime": 1624194000,
-			"weeklyTime": 1624280400,
-			"presentationTime": 1624366800,
-			"twoDay_scheduled_message_id": "Q024SGPCW5B",
-			"weekly_scheduled_message_id": "Q0251PSL6P6"
-		}
+	  {
+		"person": "<@U022G2KBP98>",
+		"presentationTime": 1624107600,
+		"twoDayTime": 1623934800,
+		"mondayTime": 1623675600,
+		"twoDayScheduledMessageId": "Q025APULG8J",
+		"mondayScheduledMessageId": ""
+	  },
+	  {
+		"person": "<@U024UGA3HB2>",
+		"presentationTime": 1624712400,
+		"twoDayTime": 1624539600,
+		"mondayTime": 1624280400,
+		"twoDayScheduledMessageId": "Q025GUTTYF6",
+		"mondayScheduledMessageId": "Q025APUNADQ"
+	  }
 	]
-}
+  }

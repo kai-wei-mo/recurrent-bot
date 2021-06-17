@@ -5,6 +5,8 @@ const dayMap = require('./maps/dayMap.js');
 const numToDay = require('./maps/numToDay.js');
 
 const {
+	getMembers,
+	getChannelName,
 	sendMessage,
 	scheduleMessage,
 	deleteScheduledMessage,
@@ -12,7 +14,7 @@ const {
 
 const signingSecret = process.env['signingSecret'];
 const token = process.env['token'];
-const channelId = process.env['channelId'];
+const channel = process.env['channelId'];
 const botMention = process.env['botMention'];
 
 const app = new App({
@@ -30,17 +32,14 @@ const help = async () => {
 	message += `\n\n\`help\``;
 	message += `\n• displays this very message`;
 
-	message += `\n\n\`list\``;
-	message += `\n• lists all presentation groups`;
+	message += `\n\n\`init $dayOfWeek\``;
+	message += `\n• creates the presentation group for the current channel with the specified day of week`;
 
-	message += `\n\n\`init group1 *(group2 group3 ...)\``;
-	message += `\n• creates one (or more) presentation groups with the specified name(s)`;
+	message += `\n\n\`show\``;
+	message += `\n• shows the scheduling information for the current channel's presentation group`;
 
 	message += `\n\n\`remove group1 *(group2 group3 ...)\``;
 	message += `\n• removes one (or more) presentation groups with the specified name(s)`;
-
-	message += `\n\n\`show group1 *(group2 group3 ...)\``;
-	message += `\n• shows the scheduling information for the specified presentation group(s)`;
 
 	message += `\n\n\`setSequence group1 @Robb *(@Sansa @Arya ...)\``;
 	message += `\n• sets the core pattern of a group's presentation sequence`;
@@ -58,215 +57,209 @@ const help = async () => {
 	message += `\n• commands and parameters are parsed by whitespace`;
 	message += `\n• this bot will only read messages in its channel that @mention the bot`;
 	message += `\n• this bot will send you reminders as direct messages`;
-	sendMessage(app, channelId, message);
-};
-
-// lists all presentation group names
-const list = async () => {
-	console.log('++ Start: Run `list` ignoring any params.');
-	fs.readdir('./groups', (err, files) => {
-		if (err) {
-			sendMessage(
-				app,
-				channelId,
-				'Something went wrong while trying to execute `list`.'
-			);
-			console.error(err);
-			return;
-		}
-
-		let message = '';
-		if (files.length) {
-			files.forEach((file) => {
-				message += file.split('.')[0] + '\n';
-			});
-			message = 'The groups are:\n```' + message + '```';
-		} else {
-			message +=
-				'There are no groups to be listed.\nTip: Add a group using `init`.';
-		}
-		sendMessage(app, channelId, message);
-	});
+	sendMessage(app, channel, message);
 };
 
 // initializes group json file
-const init = async (groups) => {
-	process.stdout.write('++ Start: Run `init` with params: ');
-	console.log(groups);
+const init = async (event, params) => {
+	// params = ["Thursdays", ... (ignored)]
+	process.stdout.write('++ Start: Run `init` in the channel: ');
+	console.log(event.channel);
 
-	if (groups.length == 0) {
-		sendMessage(
-			app,
-			channelId,
-			'Error: `init` takes one or more arguments.' +
-				`\nHint: \`${botMention} init house-lannister house-baratheon ...\``
-		);
+	let channel = event.channel;
+	let path = './groups/' + channel + '.json';
+
+	if (params.length == 0 || dayMap[params[0]] === undefined) {
+		sendMessage(app, channel, `Hint: \`${botMention} init Thursdays\``);
 		return;
 	}
 
-	groups.forEach((groupName) => {
-		let dir = './groups/' + groupName + '.json';
-		fs.access(dir, fs.F_OK, (err) => {
-			if (err) {
-				// file DNE
-				let fileJSON = {
-					dayOfWeek: -1,
-					sequence: [],
-					schedule: [],
-				};
-				fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
-					if (err) {
-						sendMessage(
-							app,
-							channelId,
-							`Something went wrong while creating the group \`${groupName}\`.`
-						);
-						console.error(err);
-						return;
-					}
-				});
-				sendMessage(
-					app,
-					channelId,
-					`Successfully created the group \`${groupName}\`.`
-				);
-				return;
-			}
-			// file exists
-			sendMessage(
-				app,
-				channelId,
-				`There already exists a group named \`${groupName}\``
-			);
-		});
-	});
-};
+	fs.access(path, fs.constants.R_OK, async (err) => {
+		if (err) {
+			// file DNE
+			const fileJSON = {
+				dayOfWeek: dayMap[params[0]],
+				sequence: await getMembers(app, token, channel),
+				schedule: [],
+			};
 
-// deletes group json file and unschedules its associated messages
-const remove = async (groups) => {
-	process.stdout.write('++ Start: Run `remove` with params: ');
-	console.log(groups);
-
-	if (groups.length == 0) {
-		sendMessage(
-			app,
-			channelId,
-			'Error: `remove` takes one or more arguments.' +
-				`\nHint: \`${botMention} remove house-bolton house-martell ...\``
-		);
-		return;
-	}
-
-	groups.forEach((groupName) => {
-		let dir = './groups/' + groupName + '.json';
-		fs.readFile(dir, (err, data) => {
-			if (err) {
-				// file DNE
-				sendMessage(
-					app,
-					channelId,
-					`The following group does not exist: \`${groupName}\`.`
-				);
-				return;
-			}
-			// file exists
-			schedule = JSON.parse(data).schedule;
-			schedule.forEach((event) => {
-				deleteScheduledMessage(
-					app,
-					event.person.substring(2, event.person.length - 1),
-					event.twoDay_scheduled_message_id
-				);
-				deleteScheduledMessage(
-					app,
-					event.person.substring(2, event.person.length - 1),
-					event.weekly_scheduled_message_id
-				);
-			});
-			fs.unlink(dir, (err) => {
+			fs.writeFile(path, JSON.stringify(fileJSON, null, 2), (err) => {
 				if (err) {
 					sendMessage(
 						app,
-						channelId,
-						`Something went wrong while removing \`${groupName}\`.`
+						channel,
+						`Something went wrong while initializing the presentation group for <#${channel}>.`
 					);
 					console.error(err);
-					return;
+				} else {
+					sendMessage(
+						app,
+						channel,
+						`Successfully initialized the presentation group for <#${channel}>.`
+					);
 				}
 			});
+		} else {
 			sendMessage(
 				app,
-				channelId,
-				`Successfully removed the group \`${groupName}\`.`
+				channel,
+				`There already exists a presentation group for <#${channel}>.`
 			);
-		});
-	});
-};
-
-// called by `show` to remove past events and order remaining events chronologically
-const _cleanSchedule = async (dir) => {
-	fs.readFile(dir, 'utf8', (err, data) => {
-		if (err) {
-			console.error(err);
-			return;
 		}
-
-		let fileJSON = JSON.parse(data);
-		let newSchedule = [];
-		fileJSON.schedule.forEach((event) => {
-			if (event.presentationTime > new Date().getTime() / 1000 + 86400) {
-				newSchedule.push(event);
-			}
-		});
-
-		// order by presentation times
-		newSchedule.sort(
-			(a, b) => (a.presentationTime > b.presentationTime && 1) || -1
-		);
-
-		fileJSON.schedule = newSchedule;
-
-		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
-			if (err) {
-				console.error(err);
-				return;
-			}
-		});
 	});
 };
 
-// sends message containing >=1 groups' information
-const show = async (groups) => {
-	process.stdout.write('++ Start: Run `show` with params: ');
-	console.log(groups);
+const remove = async (channel) => {
+	// todo: remove a file
+	// todo: unschedule many scheduled messages
+};
 
-	if (groups.length == 0) {
-		sendMessage(
-			app,
-			channelId,
-			'Error: `show` takes one or more arguments.' +
-				`\nHint: \`${botMention} show house-lannister house-baratheon ...\``
-		);
-		return;
-	}
+const _cleanSchedule = async (channel) => {
+	// todo: erase past events
+	process.stdout.write('++ Start: Run `_cleanSchedule` for the channel:');
+	console.log(channel);
 
-	groups.forEach((groupName) => {
-		let dir = './groups/' + groupName + '.json';
-		fs.readFile(dir, (err, data) => {
+	let path = './groups/' + channel + '.json';
+	return new Promise((resolve, reject) => {
+		fs.readFile(path, async (err, data) => {
 			if (err) {
 				// file DNE
 				sendMessage(
 					app,
-					channelId,
-					`The following group does not exist: \`${groupName}\`.`
+					channel,
+					`An error occured while updating the schedule of <#${channel}>.`
 				);
-				return;
+				console.error(err);
+				resolve();
+			} else {
+				// file exists
+				data = JSON.parse(data);
+				let person;
+				let presentationTime;
+				let twoDayTime;
+				let mondayTime;
+				let twoDayScheduledMessageId;
+				let mondayScheduledMessageId;
+
+				while (data.schedule.length < data.sequence.length) {
+					if (data.schedule.length == 0) {
+						person = data.sequence[0];
+						presentationTime = new Date();
+						presentationTime.setHours(13, 0, 0, 0); // 1300 GMT is 0900 EST
+						while (presentationTime.getDay() != data.dayOfWeek) {
+							presentationTime.setDate(
+								presentationTime.getDate() + 1
+							);
+						}
+
+						twoDayTime = new Date(presentationTime.getTime());
+						twoDayTime.setDate(twoDayTime.getDate() - 2);
+
+						mondayTime = new Date(presentationTime.getTime());
+						while (mondayTime.getDay() != 1) {
+							mondayTime.setDate(mondayTime.getDate() - 1);
+						}
+
+						presentationTime = presentationTime.getTime() / 1000;
+						twoDayTime = twoDayTime.getTime() / 1000;
+						mondayTime = mondayTime.getTime() / 1000;
+					} else if (data.schedule.length < data.sequence.length) {
+						let [lastPres] = data.schedule.slice(-1);
+						person = data.sequence.concat(data.sequence[0])[
+							data.sequence.indexOf(
+								lastPres.person.substring(2, 13)
+							) + 1
+						];
+						presentationTime = lastPres.presentationTime + 604800;
+						twoDayTime = lastPres.twoDayTime + 604800;
+						mondayTime = lastPres.mondayTime + 604800;
+					} else {
+						resolve();
+					}
+
+					twoDayScheduledMessageId = await scheduleMessage(
+						app,
+						person,
+						`Psst, you have a Five Minute Presentation for <#${channel}> in two days!`,
+						twoDayTime
+					);
+
+					mondayScheduledMessageId = await scheduleMessage(
+						app,
+						channel,
+						`<@${person}> will be doing a Five Minute Presentation this week on ${numToDay[
+							data.dayOfWeek
+						].slice(0, -1)}!`,
+						mondayTime
+					);
+
+					data.schedule.push({
+						person: `<@${person}>`,
+						presentationTime: presentationTime,
+						twoDayTime: twoDayTime,
+						mondayTime: mondayTime,
+
+						twoDayScheduledMessageId: twoDayScheduledMessageId,
+						mondayScheduledMessageId: mondayScheduledMessageId,
+					});
+				}
+				fs.writeFile(path, JSON.stringify(data, null, 2), (err) => {
+					if (err) {
+						sendMessage(
+							app,
+							channel,
+							`Something went wrong while editing \`${groupName}.\``
+						);
+						console.error(err);
+					} else {
+						resolve();
+					}
+				});
 			}
+		});
+	});
+};
+
+const show = async (event, params) => {
+	// params is ignored
+	process.stdout.write('++ Start: Run `show` with params: ');
+	console.log(params);
+
+	let channel = event.channel;
+	let path = './groups/' + channel + '.json';
+
+	await _cleanSchedule(channel);
+
+	fs.readFile(path, async (err, data) => {
+		if (err) {
+			// file DNE
+			sendMessage(
+				app,
+				channel,
+				`There is no presentation group for <#${channel}>.` +
+					`\nHint: \`${botMention} init Thursdays\``
+			);
+		} else {
 			// file exists
-			let message = 'SCHEDULE (dd/mm/yyyy):\n';
+			let message = '';
 			data = JSON.parse(data);
 
-			if (data.schedule.length != 0) {
+			message += 'DAY OF WEEK:\n';
+			if (numToDay[data.dayOfWeek]) {
+				message += `${numToDay[data.dayOfWeek]}\n`;
+			} else {
+				message += `(blank)\n`;
+			}
+
+			message += '\nSEQUENCE:\n';
+			if (data.sequence.length) {
+				message += data.sequence.map((member) => `<@${member}>`) + `\n`;
+			} else {
+				message += `(blank)\n`;
+			}
+
+			message += '\nSCHEDULE (dd/mm/yyyy):\n';
+			if (data.schedule.length) {
 				data.schedule.forEach((elem) => {
 					let date = new Date(elem.presentationTime * 1000);
 					let datestring =
@@ -281,355 +274,18 @@ const show = async (groups) => {
 				message += '(blank)\n';
 			}
 
-			message += '\nSEQUENCE:\n';
-			if (data.sequence.length) {
-				message += `${JSON.stringify(data.sequence)}\n\n`;
-			} else {
-				message += `(blank)\n\n`;
-			}
-
-			message += 'DAY OF WEEK:\n';
-			if (numToDay[data.dayOfWeek]) {
-				message += `${numToDay[data.dayOfWeek]}\n`;
-			} else {
-				message += `(blank)\n`;
-			}
-
 			sendMessage(
 				app,
-				channelId,
-				`The presentation schedule for \`${groupName}\` is:\n\`\`\`${message}\`\`\``
+				channel,
+				`The presentation schedule for <#${channel}> is:\n\`\`\`${message}\`\`\``
 			);
-		});
-		_cleanSchedule(dir);
+		}
 	});
 };
-
-// set the value of sequence in a group's file
-const setSequence = async (args) => {
-	// args = [house-stark, @arya, @sansa, ...]
-	process.stdout.write('++ Start: Run `setSequence` with params: ');
-	console.log(args);
-
-	if (args.length == 0) {
-		sendMessage(
-			app,
-			channelId,
-			'Error: `setSequence` takes a group name and at least one user mention.' +
-				`\nHint: \`${botMention} setSequence house-stark @Arya @Robb ...\``
-		);
-		return;
-	}
-	const groupName = args[0];
-	const groupMembers = args.slice(1, args.length);
-	const dir = './groups/' + groupName + '.json';
-
-	if (!fs.existsSync(dir)) {
-		sendMessage(
-			app,
-			channelId,
-			`There is no group named \`${groupName}\`.`
-		);
-		return;
-	}
-
-	if (groupMembers.length == 0) {
-		sendMessage(
-			app,
-			channelId,
-			'Please provide at least one group member.'
-		);
-		return;
-	}
-
-	// check every member is a mention or else we return
-	for (let i = 0; i < groupMembers.length; i++) {
-		let member = groupMembers[i];
-		if (!(member.startsWith('<@') && member.endsWith('>'))) {
-			sendMessage(
-				app,
-				channelId,
-				'Please check that all group member arguments are *mentions*.'
-			);
-			return;
-		}
-	}
-
-	fs.readFile(dir, 'utf8', (err, data) => {
-		if (err) {
-			sendMessage(
-				app,
-				channelId,
-				`Something went wrong while editing \`${groupName}.\``
-			);
-			console.error(err);
-			return;
-		}
-
-		let fileJSON = JSON.parse(data);
-		fileJSON.sequence = groupMembers;
-
-		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
-			if (err) {
-				sendMessage(
-					app,
-					channelId,
-					`Something went wrong while editing \`${groupName}.\``
-				);
-				console.error(err);
-				return;
-			}
-			sendMessage(
-				app,
-				channelId,
-				`Updated sequence of the group \`${groupName}\`.` +
-					`\nHint: Use \`${botMention} show ${groupName}\` to see the updated schedule.`
-			);
-		});
-	});
-};
-
-// set the value of dayOfWeek in a group's file
-const setDayOfWeek = async (args) => {
-	// args = [house-stark, thursday, (the rest is ignored)]
-	process.stdout.write('++ Start: Run `setDayOfWeek` with params: ');
-	console.log(args);
-
-	if (args.length < 2) {
-		sendMessage(
-			app,
-			channelId,
-			'Error: `setDayOfWeek` takes a group name and a weekday.' +
-				`\nHint: \`${botMention} setDayOfWeek house-stark Thursdays\``
-		);
-		return;
-	}
-
-	const groupName = args[0];
-	let dayOfWeek = args[1];
-	const dir = './groups/' + groupName + '.json';
-
-	if (!fs.existsSync(dir)) {
-		sendMessage(
-			app,
-			channelId,
-			`There is no group named \`${groupName}\`.`
-		);
-		return;
-	}
-
-	dayOfWeek = dayMap[dayOfWeek];
-
-	if (dayOfWeek == undefined) {
-		sendMessage(app, channelId, 'Please provide a valid day of the week.');
-		return;
-	}
-
-	fs.readFile(dir, 'utf8', (err, data) => {
-		if (err) {
-			sendMessage(
-				app,
-				channelId,
-				`Something went wrong while editing \`${groupName}.\``
-			);
-			console.error(err);
-			return;
-		}
-
-		let fileJSON = JSON.parse(data);
-		fileJSON.dayOfWeek = dayOfWeek;
-
-		fs.writeFile(dir, JSON.stringify(fileJSON, null, 2), (err) => {
-			if (err) {
-				sendMessage(
-					app,
-					channelId,
-					`Something went wrong while editing \`${groupName}.\``
-				);
-				console.error(err);
-				return;
-			}
-			sendMessage(
-				app,
-				channelId,
-				`Updated \`DAY OF WEEK\` of the group \`${groupName}\` to be \`${numToDay[dayOfWeek]}\`.`
-			);
-		});
-	});
-};
-
-// schedules reminder messages based on the sequence of a group
-const enqueue = async (args) => {
-	// args = [groupName1, groupName2, ...]
-	process.stdout.write('++ Start: Run `enqueue` with params:');
-	console.log(args);
-
-	if (args.length == 0) {
-		sendMessage(
-			app,
-			channelId,
-			'Error: `enqueue` takes one or more arguments.' +
-				`\nHint: \`${botMention} enqueue house-targaryen house-stark ...\``
-		);
-		return;
-	}
-
-	args.forEach((groupName) => {
-		const dir = './groups/' + groupName + '.json';
-
-		if (!fs.existsSync(dir)) {
-			sendMessage(
-				app,
-				channelId,
-				`There is no group named \`${groupName}\`.`
-			);
-			return;
-		}
-
-		fs.readFile(dir, 'utf8', (err, data) => {
-			if (err) {
-				sendMessage(
-					app,
-					channelId,
-					`Something went wrong while editing \`${groupName}.\``
-				);
-				console.error(err);
-				return;
-			}
-
-			let fileJSON = JSON.parse(data);
-
-			if (fileJSON.sequence.length == 0) {
-				sendMessage(
-					app,
-					channelId,
-					`There is no \`sequence\` to \`enqueue\` for the group \`${groupName}\`.`
-				);
-				return;
-			}
-
-			if (fileJSON.dayOfWeek == -1) {
-				sendMessage(
-					app,
-					channelId,
-					`The \`dayOfWeek\` is not specified for the group \`${groupName}\`.`
-				);
-				return;
-			}
-
-			let daySkip = 0;
-			fileJSON.sequence.forEach((person) => {
-				// determine what time reminders will be scheduled
-				let twoDayReminder;
-				let weeklyReminder;
-				let sched = fileJSON.schedule;
-
-				if (sched.length == 0) {
-					twoDayReminder = new Date();
-					twoDayReminder.setHours(13, 0, 0, 0); // 1300 GMT == 0900 EST
-
-					while (
-						(twoDayReminder.getDay() + 2) % 7 !=
-						fileJSON.dayOfWeek
-					) {
-						twoDayReminder.setDate(
-							twoDayReminder.getDate() + daySkip + 1
-						);
-					}
-
-					weeklyReminder = new Date(twoDayReminder);
-					weeklyReminder.setDate(
-						twoDayReminder.getDate() - twoDayReminder.getDay() + 1
-					);
-				} else {
-					twoDayReminder = new Date(
-						sched[sched.length - 1].twoDayTime * 1000
-					);
-					weeklyReminder = new Date(
-						sched[sched.length - 1].weeklyTime * 1000
-					);
-
-					twoDayReminder.setDate(
-						twoDayReminder.getDate() + daySkip + 7
-					);
-					weeklyReminder.setDate(
-						weeklyReminder.getDate() + daySkip + 7
-					);
-				}
-				daySkip += 7;
-				twoDayReminder = twoDayReminder.getTime() / 1000;
-				weeklyReminder = weeklyReminder.getTime() / 1000;
-
-				// schedule the messages
-				let twoDay_scheduled_message_id;
-				let weekly_scheduled_message_id;
-
-				(async () => {
-					twoDay_scheduled_message_id = await scheduleMessage(
-						app,
-						person.substring(2, person.length - 1),
-						`${person} You have a presentation in two days for \`${groupName}\`!`,
-						twoDayReminder
-					);
-					weekly_scheduled_message_id = await scheduleMessage(
-						app,
-						person.substring(2, person.length - 1),
-						`${person} You have a presentation this week for \`${groupName}\`!`,
-						weeklyReminder
-					);
-
-					sched.push({
-						person: person,
-						twoDayTime: twoDayReminder,
-						weeklyTime: weeklyReminder,
-						presentationTime: twoDayReminder + 172800,
-						twoDay_scheduled_message_id:
-							twoDay_scheduled_message_id,
-						weekly_scheduled_message_id:
-							weekly_scheduled_message_id,
-					});
-
-					fs.writeFileSync(
-						dir,
-						JSON.stringify(fileJSON, null, 2),
-						(err) => {
-							if (err) {
-								sendMessage(
-									app,
-									channelId,
-									`Something went wrong while editing \`${groupName}.\``
-								);
-								console.error(err);
-								return;
-							}
-						}
-					);
-				})();
-			});
-			sendMessage(
-				app,
-				channelId,
-				`Updated the schedule of \`${groupName}\`.` +
-					`\nHint: Use \`${botMention} show ${groupName}\` to see the updated schedule.`
-			);
-		});
-	});
-};
-
-const holiday = async (args) => {};
 
 const funcMap = {
-	// general
-	help: help,
-	list: list,
-	// create/delete/read groups
 	init: init,
-	remove: remove,
 	show: show,
-	// modify details of a group
-	setsequence: setSequence,
-	setdayofweek: setDayOfWeek,
-	enqueue: enqueue,
 };
 
 app.event('app_mention', async ({ event, client }) => {
@@ -648,7 +304,7 @@ app.event('app_mention', async ({ event, client }) => {
 		if (func === undefined) {
 			sendMessage(
 				app,
-				channelId,
+				channel,
 				'Your first argument should be a command name.'
 			);
 			return;
@@ -658,7 +314,7 @@ app.event('app_mention', async ({ event, client }) => {
 			params.push(msgTokens.shift());
 		}
 
-		func(params);
+		func(event, params);
 	} catch (err) {
 		console.error(err);
 	}

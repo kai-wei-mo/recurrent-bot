@@ -1,8 +1,36 @@
-const sendMessage = async (app, channelId, text) => {
+const getMembers = async (app, token, channel) => {
+	try {
+		// conversations.members method using WebClient
+		const result = await app.client.conversations.members({
+			token: token,
+			channel: channel,
+		});
+		console.log(result);
+		return result.members;
+	} catch (err) {
+		console.error(err);
+	}
+};
+
+const getChannelName = async (app, token, channel) => {
+	try {
+		// conversations.members method using WebClient
+		const result = await app.client.conversations.info({
+			token: token,
+			channel: channel,
+		});
+		console.log(result);
+		return result.channel.name;
+	} catch (err) {
+		console.error(err);
+	}
+};
+
+const sendMessage = async (app, channel, text) => {
 	try {
 		// chat.postMessage method using WebClient
 		const result = await app.client.chat.postMessage({
-			channel: channelId,
+			channel: channel,
 			text: text,
 			mrkdwn: true,
 		});
@@ -13,15 +41,16 @@ const sendMessage = async (app, channelId, text) => {
 };
 
 // up to 120 days in the future, do not be in the past
-const scheduleMessage = async (app, channelId, text, timestamp) => {
+const scheduleMessage = async (app, channel, text, timestamp) => {
 	try {
 		// chat.scheduleMessage method using WebClient
 		const result = await app.client.chat.scheduleMessage({
-			channel: channelId,
+			channel: channel,
 			text: text,
 			mrkdwn: true,
-			post_at: timestamp, // unix epoch timestamp format
+			post_at: timestamp,
 		});
+
 		console.log(result);
 		return result.scheduled_message_id;
 	} catch (err) {
@@ -32,11 +61,11 @@ const scheduleMessage = async (app, channelId, text, timestamp) => {
 };
 
 // messages to be sent in 60s will err
-const deleteScheduledMessage = async (app, channelId, messageId) => {
+const deleteScheduledMessage = async (app, channel, messageId) => {
 	try {
 		// chat.deleteScheduledMessage method using WebClient
 		const result = await app.client.chat.deleteScheduledMessage({
-			channel: channelId,
+			channel: channel,
 			scheduled_message_id: messageId,
 		});
 		console.log(result);
@@ -46,6 +75,8 @@ const deleteScheduledMessage = async (app, channelId, messageId) => {
 };
 
 module.exports = {
+	getMembers: getMembers,
+	getChannelName: getChannelName,
 	sendMessage: sendMessage,
 	scheduleMessage: scheduleMessage,
 	deleteScheduledMessage: deleteScheduledMessage,
