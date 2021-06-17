@@ -109,13 +109,57 @@ const init = async (event, params) => {
 	});
 };
 
-const remove = async (channel) => {
-	// todo: remove a file
-	// todo: unschedule many scheduled messages
+const remove = async (event, params) => {
+	// params is ignored
+	process.stdout.write('++ Start: Run `remove` with the ignored params:');
+	console.log(params);
+
+	let channel = event.channel;
+	let path = './groups/' + channel + '.json';
+	fs.readFile(path, (err, data) => {
+		if (err) {
+			// file DNE
+			sendMessage(
+				app,
+				channel,
+				`There is no presentation group for <#${channel}>.` +
+					`\nHint: \`${botMention} init Thursdays\``
+			);
+			return;
+		}
+		// file exists
+		schedule = JSON.parse(data).schedule;
+		schedule.forEach((presentation) => {
+			deleteScheduledMessage(
+				app,
+				presentation.person.substring(2, presentation.person.length - 1),
+				presentation.twoDayScheduledMessageId
+			);
+			deleteScheduledMessage(
+				app,
+				channel,
+				presentation.mondayScheduledMessageId
+			);
+		});
+		fs.unlink(path, (err) => {
+			if (err) {
+				sendMessage(
+					app,
+					channel,
+					`Something went wrong while removing the presentation group for \`<#${channel}>\`.`
+				);
+				console.error(err);
+			}
+		});
+		sendMessage(
+			app,
+			channel,
+			`Successfully removed the presentation group for \`<#${channel}>\`.`
+		);
+	});
 };
 
 const _cleanSchedule = async (channel) => {
-	// todo: erase past events
 	process.stdout.write('++ Start: Run `_cleanSchedule` for the channel:');
 	console.log(channel);
 
@@ -134,6 +178,19 @@ const _cleanSchedule = async (channel) => {
 			} else {
 				// file exists
 				data = JSON.parse(data);
+
+				// remove presentations that have passed
+				let newSchedule = [];
+				data.schedule.forEach((presentation) => {
+					if (
+						presentation.presentationTime >
+						new Date().getTime() / 1000
+					) {
+						newSchedule.push(presentation);
+					}
+				});
+				data.schedule = newSchedule;
+
 				let person;
 				let presentationTime;
 				let twoDayTime;
@@ -222,7 +279,7 @@ const _cleanSchedule = async (channel) => {
 
 const show = async (event, params) => {
 	// params is ignored
-	process.stdout.write('++ Start: Run `show` with params: ');
+	process.stdout.write('++ Start: Run `show` with the ignored params: ');
 	console.log(params);
 
 	let channel = event.channel;
@@ -286,6 +343,7 @@ const show = async (event, params) => {
 const funcMap = {
 	init: init,
 	show: show,
+	remove: remove,
 };
 
 app.event('app_mention', async ({ event, client }) => {

@@ -8,7 +8,7 @@ const app = new App({
 	token: token,
 });
 
-app.start(3000).then(() => {
+app.start(3001).then(() => {
 	console.log('i am running!');
 });
 
